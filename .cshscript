@@ -1,0 +1,28 @@
+#!/bin/tcsh -f
+#SBATCH -n 1
+#SBATCH -p dav
+#SBATCH -C x11
+#SBATCH -o .%x
+
+source /etc/csh.cshrc >& /dev/null
+module restore >& /dev/null
+
+setenv XDG_RUNTIME_DIR ${HOME}/.vnc/xdg-$SLURM_JOB_ID
+setenv XDG_SESSION_ID
+setenv LD_LIBRARY_PATH /usr/local/lib64:$LD_LIBRARY_PATH
+setenv PATH /usr/local/bin/:$PATH
+
+set XDISP=`env $desktop_setup vncserver -3dwm $vnc_opts >& /dev/stdout`
+
+if ( $status != 0 ) then
+    echo "Error: $XDISP"
+    exit
+else
+    set XDISP=`echo $XDISP | awk -F '/' '{print $NF}' | cut -d '.' -f1`
+endif
+
+echo $XDISP
+
+set XDISP=`echo $XDISP | cut -d ':' -f2`
+
+exec /bin/bash $my_dir/.vnckill $XDISP

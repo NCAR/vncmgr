@@ -1,0 +1,25 @@
+cat << EOF
+Starting SSH tunnel to the VNC server...
+
+Please load a VNC viewer on your local machine (e.g., TurboVNC or TigerVNC),
+and connect to the following host:
+
+    localhost:$host_port
+
+The viewer will ask for a *one-time* password. Use the following:
+
+    $(/usr/local/bin/vncpasswd -display :$host_disp -o |& cut -d ' ' -f5)
+
+This terminal session will hang until the tunnel is killed.
+To kill the tunnel, simply type C-c/Control-C.
+Make sure you close TurboVNC before you kill the tunnel!
+EOF
+
+while true; do
+    if [[ $(squeue -j $vnc_jobid -o %t -h 2>&1) != R ]]; then
+        echo "VNC job has finished. Killing tunnel."
+        break
+    fi
+
+    sleep 60
+done

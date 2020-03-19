@@ -1,0 +1,28 @@
+#!/bin/bash --noprofile
+#SBATCH -n 1
+#SBATCH -p dav
+#SBATCH -C x11
+#SBATCH -o .%x
+
+source /etc/bash.bashrc >& /dev/null
+module restore >& /dev/null
+
+export XDG_RUNTIME_DIR=${HOME}/.vnc/xdg-$SLURM_JOB_ID
+export XDG_SESSION_ID=
+export LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH
+export PATH=/usr/local/bin/:$PATH
+
+XDISP=$(env $desktop_setup vncserver -3dwm $vnc_opts 2>&1)
+
+if [[ $? != 0 ]]; then
+    echo "Error: $XDISP"
+    exit
+else
+    XDISP=$(echo $XDISP | awk -F '/' '{print $NF}' | cut -d '.' -f1)
+fi
+
+echo $XDISP
+
+XDISP=$(echo $XDISP | cut -d ':' -f2)
+
+exec /bin/bash $my_dir/.vnckill $XDISP
