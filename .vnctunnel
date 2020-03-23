@@ -10,6 +10,9 @@ The viewer will ask for a *one-time* password. Use the following:
 
     $(/usr/local/bin/vncpasswd -display :$host_disp -o |& cut -d ' ' -f5)
 
+If you need to generate another one-time password for this session,
+use the query sub-command in vncmgr.
+
 This terminal session will hang until the tunnel is killed.
 To kill the tunnel, simply type C-c/Control-C.
 Make sure you close TurboVNC before you kill the tunnel!
