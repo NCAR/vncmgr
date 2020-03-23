@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   23:55, 18 Mar 2020
+#   Last Revised:   09:43, 23 Mar 2020
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -41,7 +41,7 @@ session name. The session name must appear immediately after
 the COMMAND. If no session name is given, the name "default"
 is assumed.
 
-Create Mode
+Create Mode Options
     The following options are also available in create mode:
 
         -A, --account=PROJECT   project code for the job
@@ -54,12 +54,6 @@ Create Mode
                                 sbatch command (see man sbatch)
         -v, --vnc-opts="OPTS"   arguments to pass to the vncserver
                                 command (see man vncserver)
-        -w, --wait              wait for Slurm job to finish before
-                                exiting vncmgr
-
-Query Mode
-    The -w, --wait option is available to block vncmgr from
-    returning until the queried job completes.
 
 Examples
 
@@ -67,22 +61,31 @@ Examples
 
     vncmgr create -A PROJ0001 -t 2:00:00
 
-2. Query a session called workday and wait for it to finish:
+2. Query a session called workday:
 
-    vncmgr query workday --wait
+    vncmgr query workday
+
+3. Run in interactive mode from outside Cheyenne:
+
+    ssh -t -L $USER cheyenne.ucar.edu $my_dir/vncmgr
 
 EOF
 }
 
 function menu {
 cat << EOF
------------------------------------------------
-        Manage VNC desktops on Casper
------------------------------------------------
+--------------------------------------------------------
+             Manage VNC desktops on Casper
+--------------------------------------------------------
 
 Active servers, reported as Slurm jobs:
 
 $job_data
+
+Use the following options to create a new VNC session,
+query an existing session (which will provide you with a
+new one-time password), or kill a running VNC session
+and end the Slurm job associated with it.
 
 Options:
     create [SESSION]
@@ -160,7 +163,6 @@ time_left=$(squeue -j $vnc_jobid -O timeleft -h | sed 's/ *$//')
 clear
 
 if [[ $(pinky -f $USER | awk '{print $NF}') == 128.117* ]]; then
-if [[ $(ps -o comm= -p $PPID) != sshd ]] || [[ $wait_mode == true ]]; then
 cat << EOF
 
 You appear to be connected to the NCAR Internal Network either directly
@@ -180,9 +182,7 @@ Warning: if you disconnect from the NCAR Internal Network or VPN, your
          VNC connection will be disrupted.
 
 EOF
-return
-fi; fi
-
+else
 cat << EOF
 
 To activate the VNC session on your client machine (external network):
@@ -208,6 +208,7 @@ Note: you can avoid the tunneling step if using the NCAR internal network
       or the NCAR VPN (https://www2.cisl.ucar.edu/user-support/vpn-access)
           
 EOF
+fi
 }
 
 function query_session {
@@ -223,7 +224,6 @@ function query_job {
         display_job
     else
         echo "Error: no session found with name $vnc_session"
-        wait_mode=false
     fi
 }
 
@@ -251,11 +251,16 @@ function live_driver {
         if [[ ${vnc_jobid}z != z ]]; then
             echo "Error: VNC session with name $vnc_session already exists"
         else
+            clear
+            echo -e "\nUse these options to configure your VNC desktop session and Slurm job."
+            echo "The maximum time allowed for a job is 24:00:00. Available desktop shells"
+            echo -e "include 2d (GNOME2), gnome-session (GNOME3), and startkde (KDE).\n"
+
             read -e -p "Enter project code for VNC job (default=$DAV_PROJECT): " job_project
             read -e -p "Enter time limit for VNC job (default=$def_walltime): " job_walltime
             read -e -p "Choose desktop shell for VNC job (default=$def_shell): " vnc_desktop
-            read -e -p "Additional Slurm arguments for VNC job: " -a job_opts
-            read -e -p "Arguments to forward to vncserver program: " -a vnc_opts
+            read -e -p "Additional Slurm arguments for VNC job (optional): " -a job_opts
+            read -e -p "Arguments to forward to vncserver program (optional): " -a vnc_opts
 
             create_job
             display_job
@@ -319,9 +324,6 @@ if [[ $# -gt 0 ]]; then
                 -v|--vnc-opts*)
                     [[ $1 == *=* ]] && vnc_opts=${1#*=} || vnc_opts=$2
                     shift; ;;
-                -w|--wait)
-                    wait_mode=true
-                    ;;
                 *)
                     echo "Error: unrecognized argument to create ($1)"
                     ;;
@@ -332,10 +334,6 @@ if [[ $# -gt 0 ]]; then
         create_job
         display_job
     elif [[ query == $sub_com* ]]; then
-        if [[ $1 == -w ]] || [[ $1 == --wait ]]; then
-            wait_mode=true
-        fi
-        
         query_job
     elif [[ kill == $sub_com* ]]; then
         kill_job
@@ -343,17 +341,7 @@ if [[ $# -gt 0 ]]; then
         echo "Fatal error: subcommand $sub_com not recognized"
         exit 1
     fi
-
-    if [[ $wait_mode == true ]]; then
-        while [[ $(squeue -j $vnc_jobid -h -O statecompact) == R* ]]; do
-            sleep 5
-        done
-
-        echo -e "\nVNC session ($vnc_session) has timed out"
-    fi
 else
-    wait_mode=true
-
     while true; do
         live_driver
 
