@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   09:43, 23 Mar 2020
+#   Last Revised:   14:13, 23 Mar 2020
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -134,14 +134,13 @@ function create_job {
 
     # Submit batch script to Slurm
     echo -e "\nSubmitting batch job to Slurm"
+    rm -f .$job_name
     vnc_jobid=$(sbatch $job_opts -A $job_project -t $job_walltime -J $job_name .vncscript.slurm | awk '{ print $NF }')
 
     if [[ $? != 0 ]]; then
         echo "Fatal error: could not submit Slurm job"
         exit 2
     fi
-
-    rm -f .$job_name
 
     echo "Waiting for job to start ..."
     
@@ -259,8 +258,8 @@ function live_driver {
             read -e -p "Enter project code for VNC job (default=$DAV_PROJECT): " job_project
             read -e -p "Enter time limit for VNC job (default=$def_walltime): " job_walltime
             read -e -p "Choose desktop shell for VNC job (default=$def_shell): " vnc_desktop
-            read -e -p "Additional Slurm arguments for VNC job (optional): " -a job_opts
-            read -e -p "Arguments to forward to vncserver program (optional): " -a vnc_opts
+            read -e -p "Additional Slurm arguments for VNC job (optional): " job_opts
+            read -e -p "Arguments to forward to vncserver program (optional): " vnc_opts
 
             create_job
             display_job
@@ -307,27 +306,32 @@ if [[ $# -gt 0 ]]; then
         fi
 
         while [[ $# -gt 0 ]]; do
-            case $1 in
-                -A|--account*)
-                    [[ $1 == *=* ]] && job_project=${1#*=} || job_project=$2
-                    shift; ;;
-                -t|--time*)
-                    [[ $1 == *=* ]] && job_walltime=${1#*=} || job_walltime=$2
-                    job_walltime=$2
-                    shift; ;;
-                -d|--desktop*)
-                    [[ $1 == *=* ]] && vnc_desktop=${1#*=} || vnc_desktop=$2
-                    shift; ;;
-                -j|--job-opts*)
-                    [[ $1 == *=* ]] && job_opts=${1#*=} || job_opts=$2
-                    shift; ;;
-                -v|--vnc-opts*)
-                    [[ $1 == *=* ]] && vnc_opts=${1#*=} || vnc_opts=$2
-                    shift; ;;
-                *)
-                    echo "Error: unrecognized argument to create ($1)"
-                    ;;
-            esac
+            if [[ ! -z $read_value ]]; then
+                declare "$read_value=$1"
+                unset read_value
+            else
+                case $1 in
+                    -A|--account*)
+                        [[ $1 == *=* ]] && job_project=${1#*=} || read_value=job_project
+                        ;;
+                    -t|--time*)
+                        [[ $1 == *=* ]] && job_walltime=${1#*=} || read_value=job_walltime
+                        ;;
+                    -d|--desktop*)
+                        [[ $1 == *=* ]] && vnc_desktop=${1#*=} || read_value=vnc_desktop
+                        ;;
+                    -j|--job-opts*)
+                        [[ $1 == *=* ]] && job_opts=${1#*=} || read_value=job_opts
+                        ;;
+                    -v|--vnc-opts*)
+                        [[ $1 == *=* ]] && vnc_opts=${1#*=} || read_value=vnc_opts
+                        ;;
+                    *)
+                        echo "Error: unrecognized argument to create ($1)"
+                        ;;
+                esac
+            fi
+
             shift
         done
 
