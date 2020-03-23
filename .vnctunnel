@@ -6,8 +6,9 @@ and connect to the following host:
 
     localhost:$host_port
 
-The viewer will ask for a *one-time* password. Use the password generated
-by vncmgr. If you need a new OTP, use the query command to vncmgr.
+The viewer will ask for a *one-time* password. Use the following:
+
+    $(/usr/local/bin/vncpasswd -display :$host_disp -o |& cut -d ' ' -f5)
 
 This terminal session will hang until the tunnel is killed.
 To kill the tunnel, simply type C-c/Control-C.
