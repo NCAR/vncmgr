@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   14:13, 23 Mar 2020
+#   Last Revised:   09:26, 03 Apr 2020
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -235,6 +235,20 @@ function kill_job {
     fi
 }
 
+function map_desktop {
+    case $vnc_desktop in
+        gnome2|GNOME2)
+            vnc_desktop=2d
+            ;;
+        gnome3|GNOME3)
+            vnc_desktop=gnome-session
+            ;;
+        kde|KDE)
+            vnc_desktop=startkde
+            ;;
+    esac
+}
+
 function live_driver {
     job_data=$(squeue -u $USER -o "%.7i %.10u %.5t %.10P %.10L %j" -t pd,r | grep -e JOBID -e 'vncs-' --color=never)
     clear
@@ -261,6 +275,7 @@ function live_driver {
             read -e -p "Additional Slurm arguments for VNC job (optional): " job_opts
             read -e -p "Arguments to forward to vncserver program (optional): " vnc_opts
 
+            map_desktop
             create_job
             display_job
         fi
@@ -319,6 +334,7 @@ if [[ $# -gt 0 ]]; then
                         ;;
                     -d|--desktop*)
                         [[ $1 == *=* ]] && vnc_desktop=${1#*=} || read_value=vnc_desktop
+                        map_desktop
                         ;;
                     -j|--job-opts*)
                         [[ $1 == *=* ]] && job_opts=${1#*=} || read_value=job_opts
