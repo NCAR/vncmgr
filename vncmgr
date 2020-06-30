@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   09:26, 03 Apr 2020
+#   Last Revised:   16:24, 30 Jun 2020
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -28,7 +28,7 @@ machine. Compatible viewers include TurboVNC and TigerVNC.
 
 If no COMMAND is given, vncmgr will run in an interactive
 mode, with instructions given in a menu. If a COMMAND is
-provided, vncmgr will run in a batch mode.
+provided, vncmgr will run in a command-line mode.
 
 Available COMMANDs:
     list        display all active VNC sessions
@@ -41,8 +41,8 @@ session name. The session name must appear immediately after
 the COMMAND. If no session name is given, the name "default"
 is assumed.
 
-Create Mode Options
-    The following options are also available in create mode:
+Create Command Options
+    The following options are also available when using create:
 
         -A, --account=PROJECT   project code for the job
                                 (or use \$DAV_PROJECT env variable)
@@ -135,10 +135,9 @@ function create_job {
     # Submit batch script to Slurm
     echo -e "\nSubmitting batch job to Slurm"
     rm -f .$job_name
-    vnc_jobid=$(sbatch $job_opts -A $job_project -t $job_walltime -J $job_name .vncscript.slurm | awk '{ print $NF }')
+    vnc_jobid=$(sbatch $job_opts -A $job_project -t $job_walltime -J $job_name .vncscript.slurm | awk '{ print $NF }'; exit ${PIPESTATUS[0]})
 
     if [[ $? != 0 ]]; then
-        echo "Fatal error: could not submit Slurm job"
         exit 2
     fi
 
