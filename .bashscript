@@ -12,7 +12,7 @@ export XDG_SESSION_ID=
 export LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH
 export PATH=/usr/local/bin/:$PATH
 
-XDISP=$(env $desktop_setup vncserver -3dwm $vnc_opts 2>&1)
+XDISP=$(env $desktop_setup vncserver $vnc_opts 2>&1)
 
 if [[ $? != 0 ]]; then
     echo "Error: $XDISP"

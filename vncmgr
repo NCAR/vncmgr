@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   16:24, 30 Jun 2020
+#   Last Revised:   17:07, 08 Jul 2020
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -158,9 +158,10 @@ function create_job {
 
 function display_job {
 time_left=$(squeue -j $vnc_jobid -O timeleft -h | sed 's/ *$//')
+user_ip=$(pinky -f $USER | awk '{print $NF}')
 clear
 
-if [[ $(pinky -f $USER | awk '{print $NF}') == 128.117* ]]; then
+if [[ $user_ip == 128.117* ]] && [[ $user_ip != 128.117.181* ]]; then
 cat << EOF
 
 You appear to be connected to the NCAR Internal Network either directly
@@ -212,7 +213,7 @@ fi
 function query_session {
     vnc_session=$(sed 's/vncs-//' <<< ${1:-default})
     job_name=vncs-$vnc_session
-    vnc_jobid=$(squeue -u $USER -n $job_name -O jobid -h | sed 's/ *$//')
+    vnc_jobid=$(squeue -u $USER -n $job_name -O jobid -h -t pd,r | sed 's/ *$//')
 } 
 
 function query_job {
