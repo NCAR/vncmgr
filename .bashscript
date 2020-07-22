@@ -13,6 +13,10 @@ export LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH
 export PATH=/usr/local/bin/:$PATH
 export TVNC_VGL=1
 
+# Create storage and clean up startup script if exists
+mkdir -p $XDG_RUNTIME_DIR
+rm -f ${HOME}/.vnc/xstartup.turbovnc
+
 XDISP=$(env $desktop_setup vncserver $vnc_opts 2>&1)
 
 if [[ $? != 0 ]]; then

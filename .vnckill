@@ -1,6 +1,6 @@
 #!/bin/bash
 
-trap "/usr/local/bin/vncserver -kill :$1 ; rm -r ${HOME}/.vnc/xdg-$SLURM_JOB_ID" 1 2 3 15
+trap "/usr/local/bin/vncserver -kill :$1 ; rm -fr ${HOME}/.vnc/xdg-$SLURM_JOB_ID" 1 2 3 15
 
 sleep infinity &
 wait

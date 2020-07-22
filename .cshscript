@@ -13,6 +13,10 @@ setenv LD_LIBRARY_PATH /usr/local/lib64:$LD_LIBRARY_PATH
 setenv PATH /usr/local/bin/:$PATH
 setenv TVNC_VGL 1
 
+# Create storage and clean up startup script if exists
+mkdir -p $XDG_RUNTIME_DIR
+rm -f ${HOME}/.vnc/xstartup.turbovnc
+
 set XDISP=`env $desktop_setup vncserver $vnc_opts >& /dev/stdout`
 
 if ( $status != 0 ) then
