@@ -11,6 +11,7 @@ export XDG_RUNTIME_DIR=${HOME}/.vnc/xdg-$SLURM_JOB_ID
 export XDG_SESSION_ID=
 export LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH
 export PATH=/usr/local/bin/:$PATH
+export TVNC_VGL=1
 
 XDISP=$(env $desktop_setup vncserver $vnc_opts 2>&1)
 

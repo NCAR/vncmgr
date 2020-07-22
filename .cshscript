@@ -11,6 +11,7 @@ setenv XDG_RUNTIME_DIR ${HOME}/.vnc/xdg-$SLURM_JOB_ID
 setenv XDG_SESSION_ID
 setenv LD_LIBRARY_PATH /usr/local/lib64:$LD_LIBRARY_PATH
 setenv PATH /usr/local/bin/:$PATH
+setenv TVNC_VGL 1
 
 set XDISP=`env $desktop_setup vncserver $vnc_opts >& /dev/stdout`
 
