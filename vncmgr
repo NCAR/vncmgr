@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   17:07, 08 Jul 2020
+#   Last Revised:   15:50, 28 Sep 2020
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -275,6 +275,12 @@ function live_driver {
             read -e -p "Additional Slurm arguments for VNC job (optional): " job_opts
             read -e -p "Arguments to forward to vncserver program (optional): " vnc_opts
 
+            if [[ -z $job_project ]]; then
+                echo -e "\nError: no core-hour account given for Slurm job"
+                echo "       enter interactively or specify using DAV_PROJECT variable"
+                exit 1
+            fi
+
             map_desktop
             create_job
             display_job
@@ -344,12 +350,24 @@ if [[ $# -gt 0 ]]; then
                         ;;
                     *)
                         echo "Error: unrecognized argument to create ($1)"
+                        
+                        if [[ $1 != -* ]]; then
+                            echo "       (session name must be given immediately after create)"
+                        fi
+
+                        exit 1
                         ;;
                 esac
             fi
 
             shift
         done
+
+        if [[ -z $job_project ]]; then
+            echo "Error: no core-hour account given for Slurm job"
+            echo "       specify using -A flag or DAV_PROJECT variable"
+            exit 1
+        fi
 
         create_job
         display_job
