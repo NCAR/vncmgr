@@ -1,13 +1,12 @@
-#!/bin/bash --noprofile
-#SBATCH -n 1
-#SBATCH -p dav
-#SBATCH -C x11
-#SBATCH -o .%x
+#!/bin/bash
+#PBS -l select=1:ncpus=1:ngpus=1
+#PBS -q casper
+#PBS -l gpu_type=gp100
+#PBS -j oe
 
-source /etc/bash.bashrc >& /dev/null
 module restore >& /dev/null
 
-export XDG_RUNTIME_DIR=${HOME}/.vnc/xdg-$SLURM_JOB_ID
+export XDG_RUNTIME_DIR=${HOME}/.vnc/xdg-$PBS_JOBID
 export XDG_SESSION_ID=
 export LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH
 export PATH=/usr/local/bin/:$PATH
@@ -23,7 +22,7 @@ if [[ $? != 0 ]]; then
     echo "Error: $XDISP"
     exit
 else
-    XDISP=$(echo $XDISP | awk -F '/' '{print $NF}' | cut -d '.' -f1)
+    XDISP="vncmgr-display $(echo $XDISP | awk -F '/' '{print $NF}' | cut -d '.' -f1)"
 fi
 
 echo $XDISP

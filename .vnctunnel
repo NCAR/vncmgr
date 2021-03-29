@@ -1,3 +1,7 @@
+#/bin/bash --norc
+
+export PATH=/glade/u/apps/opt/qstat-cache:$PATH
+
 cat << EOF
 Starting SSH tunnel to the VNC server...
 
@@ -19,7 +23,7 @@ Make sure you close TurboVNC before you kill the tunnel!
 EOF
 
 while true; do
-    if [[ $(squeue -j $vnc_jobid -o %t -h 2>&1) != R ]]; then
+    if [[ $(qstat @casper $vnc_jobid | grep ^$vnc_jobid | awk '{print $5}') != R ]]; then
         echo "VNC job has finished. Killing tunnel."
         break
     fi

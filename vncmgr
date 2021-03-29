@@ -4,17 +4,29 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   08:09, 30 Sep 2020
+#   Last Revised:   12:53, 23 Mar 2021
 #
 
 # Make sure environment is configured to run VNC jobs
 . /etc/profile >& /dev/null
 my_dir="$( cd "$(dirname "$0")" ; pwd )"
-cd $HOME
+cd $HOME; mkdir -p .vncmgr
+
+# Set up cross-server submission
+if [[ $NCAR_HOST == cheyenne ]]; then
+    QSCACHE_SERVER=casper ds=casper
+else
+    ds=
+fi
 
 # Default values for jobs
 def_walltime=4:00:00
 def_shell=2d
+
+# qstat display settings
+qstat_fmt="%-9.9s %-16s %2s %4s %7s %14s\n"
+qstat_labels="JobID Name S NCPU ReqMem Time(HH:MM)"
+qstat_splits="----- ---- - ---- ------ -------------"
 
 function usage {
 cat << EOF
@@ -46,12 +58,12 @@ Create Command Options
 
         -A, --account=PROJECT   project code for the job
                                 (or use \$DAV_PROJECT env variable)
-        -t, --time=WALLTIME     length of time that the Slurm job
-                                will perist (man sbatch for format)
+        -t, --time=WALLTIME     length of time that the PBS job
+                                will perist (man qsub for format)
         -d, --desktop=SHELL     type of desktop shell VNC will use
                                 (2d, gnome-session, or startkde)
         -j, --job-opts="OPTS"   additional arguments to pass to the
-                                sbatch command (see man sbatch)
+                                qsub command (see man qsub)
         -v, --vnc-opts="OPTS"   arguments to pass to the vncserver
                                 command (see man vncserver)
 
@@ -78,14 +90,16 @@ cat << EOF
              Manage VNC desktops on Casper
 --------------------------------------------------------
 
-Active servers, reported as Slurm jobs:
+Active servers, reported as PBS jobs:
 
+$(printf "$qstat_fmt" $qstat_labels)
+$(printf "$qstat_fmt" $qstat_splits)
 $job_data
 
 Use the following options to create a new VNC session,
 query an existing session (which will provide you with a
 new one-time password), or kill a running VNC session
-and end the Slurm job associated with it.
+and end the PBS job associated with it.
 
 Options:
     create [SESSION]
@@ -101,24 +115,25 @@ function check_server {
     SECONDS=0
     echo "Waiting for VNC server to initialize ..."
     
-    while [[ ! -s .$job_name ]]; do
+    while [[ ! -s .vncmgr/$job_name ]]; do
         if [[ $SECONDS -ge 60 ]]; then
-            echo "Fatal error: server initialization timeout"
-            exit 2
+            >&2 echo "Error: server initialization timeout"
+            exit 1
         fi
     done
 
-    if [[ $(cat ~/.$job_name) =~ casper[0-9]+:[0-9]+$ ]]; then
-        host_info=$(cat .$job_name)
+    host_info=$(grep --color=never vncmgr-display .vncmgr/$job_name | awk '{print $2}')
+
+    if [[ -n $host_info ]]; then
         host_addr=${host_info%:*}.ucar.edu
         host_disp=${host_info#*:}
         host_port=$((host_disp + 5900))
     else
-        echo "Fatal error: unexpected output from VNC server. Cancelling job."
-        scancel $vnc_jobid
-        echo -e "VNC output:\n"
-        cat .$job_name
-        exit 2
+        >&2 echo "Error: unexpected output from VNC server. Cancelling job."
+        qdel$ds $vnc_jobid >& /dev/null
+        >&2 echo -e "VNC output:\n"
+        >&2 cat .vncmgr/$job_name
+        exit 1
     fi
 }
 
@@ -126,32 +141,33 @@ function create_job {
     job_shell=$(echo ${SHELL##*/} | sed 's/tcsh/csh/')
     job_project=${job_project:-$DAV_PROJECT}
     job_walltime=${job_walltime:-$def_walltime}
+    job_args="$job_opts -A $job_project -l walltime=$job_walltime -N $job_name -o .vncmgr/$job_name"
     desktop_setup="TVNC_WM=${vnc_desktop:-$def_shell}"
     export desktop_setup vnc_opts my_dir
 
     if [[ -z $job_project ]]; then
-        echo -e "\nError: no core-hour account given for Slurm job"
-        echo "       specify $PERRMSG or with DAV_PROJECT variable"
+        >&2 echo -e "\nError: no valid project account given for PBS job"
+        >&2 echo "       specify $perm_msg or with DAV_PROJECT variable"
         exit 1
     fi
 
     echo "Creating new VNC session ($vnc_session) ..."
-    envsubst '$desktop_setup $vnc_opts $my_dir' < $my_dir/.${job_shell}script > .vncscript.slurm
+    envsubst '$desktop_setup $vnc_opts $my_dir' < $my_dir/.${job_shell}script > .vncmgr/script.pbs
 
-    # Submit batch script to Slurm
-    echo -e "\nSubmitting batch job to Slurm"
-    rm -f .$job_name
-    vnc_jobid=$(sbatch $job_opts -A $job_project -t $job_walltime -J $job_name .vncscript.slurm | awk '{ print $NF }'; exit ${PIPESTATUS[0]})
+    # Submit batch script to PBS
+    echo -e "\nSubmitting batch job to PBS"
+    rm -f .vncmgr/$job_name
+    vnc_jobid=$(qsub$ds $job_args .vncmgr/script.pbs |& sed -n 's/\([0-9]*\).casper.*/\1/p'; exit ${PIPESTATUS[0]})
 
     if [[ $? != 0 ]]; then
-        exit 2
+        exit 1
     fi
 
     echo "Waiting for job to start ..."
     
-    while [[ $job_status != R\ * ]]; do
+    while [[ $job_status != R ]]; do
         if [[ $SECONDS -gt 8 ]]; then
-            job_status=$(squeue -j $vnc_jobid -O statecompact -h)
+            job_status=$(qstat $vnc_jobid | grep ^$vnc_jobid | awk '{print $5}')
         fi
     done 
 
@@ -159,11 +175,12 @@ function create_job {
 
     # Create tunnel file to be used for non VPN sessions
     export host_port host_disp vnc_jobid
-    envsubst '$host_port $host_disp $vnc_jobid' < $my_dir/.vnctunnel > .vnctunnel-$vnc_session
+    envsubst '$host_port $host_disp $vnc_jobid' < $my_dir/.vnctunnel > .vncmgr/tunnel-$vnc_session
+    chmod u+x .vncmgr/tunnel-$vnc_session
 }
 
 function display_job {
-time_left=$(squeue -j $vnc_jobid -O timeleft -h | sed 's/ *$//')
+time_left=$(qstat -w $vnc_jobid | grep "^$vnc_jobid" | awk '{print $11" / "$9}')
 user_ip=$(pinky -f $USER | awk '{print $NF}')
 clear
 
@@ -181,7 +198,7 @@ and connect to the following host:
 
 The viewer will ask for a *one-time* password. Use the following:
 
-    $(ssh $host_addr "/usr/local/bin/vncpasswd -display :$host_disp -o |& cut -d ' ' -f5")
+    $(ssh $host_addr "/usr/local/bin/vncpasswd -display :$host_disp -o |& cut -d ' ' -f5" | grep "^[0-9]")
 
 Warning: if you disconnect from the NCAR Internal Network or VPN, your
          VNC connection will be disrupted.
@@ -194,20 +211,25 @@ To activate the VNC session on your client machine (external network):
 
   1) Create an SSH tunnel to stream desktop data to your local computer:
 
-       ssh -l $USER -L $host_port:localhost4:$host_port $host_addr "bash .vnctunnel-$vnc_session"
+    ssh -l $USER -L $host_port:localhost4:$host_port $host_addr "bash ~/.vncmgr/tunnel-$vnc_session"
   
   2) Follow instructions given in local terminal. The local terminal session
      will hang after creating the tunnel. This behavior is normal.
 
-If you disconnect from the VNC server and wish to reconnect,
-you will need to restart the tunnel to generate a new password.
-This VNC server will timeout and shut down automatically after ${time_left}.
+If you disconnect from the VNC server and wish to reconnect, you will need to
+restart the tunnel to generate a new password. This VNC server will timeout and
+shut down automatically once wallclock limit is reached (${time_left}).
 
-To end the Slurm job and shut down the VNC server:
+To end the PBS job and shut down the VNC server:
 
-  1) Use scancel to end the VNC server job:
+  1) Run "vncmgr kill $vnc_session"
+        
+        OR
+  
+     Use qdel to end the VNC server job:
 
-       scancel $vnc_jobid
+    qdel $vnc_jobid         (from Casper)
+    qdelcasper $vnc_jobid   (from Cheyenne)
 
 Note: you can avoid the tunneling step if using the NCAR internal network
       or the NCAR VPN (https://www2.cisl.ucar.edu/user-support/vpn-access)
@@ -219,7 +241,7 @@ fi
 function query_session {
     vnc_session=$(sed 's/vncs-//' <<< ${1:-default})
     job_name=vncs-$vnc_session
-    vnc_jobid=$(squeue -u $USER -n $job_name -O jobid -h -t pd,r | sed 's/ *$//')
+    vnc_jobid=$(qstat -u $USER -w | awk -v name=$job_name '$4 ~ name { split($1, id, "."); print id[1] }')
 } 
 
 function query_job {
@@ -228,16 +250,16 @@ function query_job {
         check_server
         display_job
     else
-        echo "Error: no session found with name $vnc_session"
+        >&2 echo "No session found with name $vnc_session"
     fi
 }
 
 function kill_job {
     if [[ ${vnc_jobid}z != z ]]; then
         echo "Cancelling VNC session ($vnc_session) with job ID $vnc_jobid ..."
-        scancel $vnc_jobid
+        qdel$ds $vnc_jobid >& /dev/null
     else
-        echo "Error: no session found with name $vnc_session"
+        >&2 echo "No session found with name $vnc_session"
     fi
 }
 
@@ -256,7 +278,7 @@ function map_desktop {
 }
 
 function live_driver {
-    job_data=$(squeue -u $USER -o "%.7i %.10u %.5t %.10P %.10L %j" -t pd,r | grep -e JOBID -e 'vncs-' --color=never)
+    job_data=$(qstat -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}')
     clear
     menu
 
@@ -264,22 +286,27 @@ function live_driver {
     echo
     history -s "${user_opts[@]}"
 
+    if [[ ${#user_opts[1]} -gt 10 ]]; then
+        >&2 echo "Error: max session name length is 10 chars"
+        exit 1
+    fi
+
     query_session ${user_opts[1]}
 
     if [[ create == ${user_opts[0]}* ]]; then
-        PERRMSG="interactively"
+        perm_msg="interactively"
         if [[ ${vnc_jobid}z != z ]]; then
             echo "Error: VNC session with name $vnc_session already exists"
         else
             clear
-            echo -e "\nUse these options to configure your VNC desktop session and Slurm job."
+            echo -e "\nUse these options to configure your VNC desktop session and PBS job."
             echo "The maximum time allowed for a job is 24:00:00. Available desktop shells"
             echo -e "include 2d (GNOME2), gnome-session (GNOME3), and startkde (KDE).\n"
 
             read -e -p "Enter project code for VNC job (default=$DAV_PROJECT): " job_project
             read -e -p "Enter time limit for VNC job (default=$def_walltime): " job_walltime
             read -e -p "Choose desktop shell for VNC job (default=$def_shell): " vnc_desktop
-            read -e -p "Additional Slurm arguments for VNC job (optional): " job_opts
+            read -e -p "Additional PBS arguments for VNC job (optional): " job_opts
             read -e -p "Arguments to forward to vncserver program (optional): " vnc_opts
 
             map_desktop
@@ -299,7 +326,7 @@ function live_driver {
 
 # Run in batch if arguments, otherwise use live mode
 if [[ $# -gt 0 ]]; then
-    PERRMSG="using -A flag"
+    perm_msg="using -A flag"
 
     # Help flag intercept
     if [[ " $@ " == *" --help "* ]] || [[ " $@ " == *" -h "* ]]; then
@@ -310,14 +337,21 @@ if [[ $# -gt 0 ]]; then
     sub_com=$1; shift
 
     if [[ list == $sub_com* ]]; then
-        echo -e "\nActive servers, reported as Slurm jobs:\n"
-        squeue -u $USER -o "%.7i %.10u %.5t %.10P %.10L %j" -t pd,r | grep -e JOBID -e 'vncs-' --color=never
+        echo -e "\nActive servers, reported as PBS jobs:\n"
+        printf "$qstat_fmt" $qstat_labels
+        printf "$qstat_fmt" $qstat_splits
+        qstat -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}'
         echo
         exit
     fi
 
     if [[ $1 =~ ^[^-].* ]]; then
-        user_sess=$1; shift
+        if [[ ${#1} -le 10 ]]; then
+            user_sess=$1; shift
+        else
+            >&2 echo "Error: max session name length is 10 chars"
+            exit 1
+        fi
     fi
 
     query_session $user_sess
@@ -352,10 +386,10 @@ if [[ $# -gt 0 ]]; then
                         [[ $1 == *=* ]] && vnc_opts=${1#*=} || read_value=vnc_opts
                         ;;
                     *)
-                        echo "Error: unrecognized argument to create ($1)"
+                        >&2 echo "Error: unrecognized argument to create ($1)"
                         
                         if [[ $1 != -* ]]; then
-                            echo "       (session name must be given immediately after create)"
+                            >&2 echo "       (session name must be given immediately after create)"
                         fi
 
                         exit 1
@@ -373,7 +407,7 @@ if [[ $# -gt 0 ]]; then
     elif [[ kill == $sub_com* ]]; then
         kill_job
     else
-        echo "Fatal error: subcommand $sub_com not recognized"
+        >&2 echo "Error: subcommand $sub_com not recognized"
         exit 1
     fi
 else

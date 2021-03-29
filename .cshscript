@@ -1,13 +1,13 @@
 #!/bin/tcsh -f
-#SBATCH -n 1
-#SBATCH -p dav
-#SBATCH -C x11
-#SBATCH -o .%x
+#PBS -l select=1:ncpus=1:ngpus=1
+#PBS -q casper
+#PBS -l gpu_type=gp100
+#PBS -j oe
 
 source /etc/csh.cshrc >& /dev/null
 module restore >& /dev/null
 
-setenv XDG_RUNTIME_DIR ${HOME}/.vnc/xdg-$SLURM_JOB_ID
+setenv XDG_RUNTIME_DIR ${HOME}/.vnc/xdg-$PBS_JOBID
 setenv XDG_SESSION_ID
 setenv LD_LIBRARY_PATH /usr/local/lib64:$LD_LIBRARY_PATH
 setenv PATH /usr/local/bin/:$PATH
@@ -26,7 +26,7 @@ else
     set XDISP=`echo $XDISP | awk -F '/' '{print $NF}' | cut -d '.' -f1`
 endif
 
-echo $XDISP
+echo "vncmgr-display $XDISP"
 
 set XDISP=`echo $XDISP | cut -d ':' -f2`
 
