@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   12:53, 23 Mar 2021
+#   Last Revised:   17:07, 30 Mar 2021
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -122,6 +122,8 @@ function check_server {
         fi
     done
 
+    sleep 2
+
     host_info=$(grep --color=never vncmgr-display .vncmgr/$job_name | awk '{print $2}')
 
     if [[ -n $host_info ]]; then
@@ -138,6 +140,31 @@ function check_server {
 }
 
 function create_job {
+    # Make sure job_opts includes necessary settings
+    if [[ $job_opts == *":ngpus="* ]]; then
+        if [[ ! $job_opts =~ .*:ngpus=1[:\ ].* ]]; then
+            opt_msg=True
+            echo "Resource chunks must have ngpus=1; altering custom PBS options ..."
+            job_opts=$(sed 's|:ngpus=[1-9]*|:ngpus=1|' <<< $job_opts)
+        fi
+    elif [[ $job_opts == *"select="* ]]; then
+        opt_msg=True
+        echo "Resource chunks must have ngpus=1; altering custom PBS options ..."
+        job_opts=$(sed 's|\(select=[^ ]*\)|\1:ngpus=1|' <<< $job_opts)
+    fi
+
+    if [[ $job_opts == *"gpu_type="* ]]; then
+        if [[ $job_opts != *"gpu_type=gp100"* ]]; then
+            opt_msg=True
+            echo "gpu_type must be set to gp100; altering custom PBS options ..."
+            job_opts=$(sed 's|gpu_type=[^ ]*|gpu_type=gp100|' <<< $job_opts)
+        fi
+    fi
+
+    if [[ $opt_msg == True ]]; then
+        echo "New job-opts = $job_opts"
+    fi
+
     job_shell=$(echo ${SHELL##*/} | sed 's/tcsh/csh/')
     job_project=${job_project:-$DAV_PROJECT}
     job_walltime=${job_walltime:-$def_walltime}
@@ -308,6 +335,7 @@ function live_driver {
             read -e -p "Choose desktop shell for VNC job (default=$def_shell): " vnc_desktop
             read -e -p "Additional PBS arguments for VNC job (optional): " job_opts
             read -e -p "Arguments to forward to vncserver program (optional): " vnc_opts
+            echo
 
             map_desktop
             create_job
