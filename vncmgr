@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   17:07, 30 Mar 2021
+#   Last Revised:   13:13, 31 Mar 2021
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -24,6 +24,7 @@ def_walltime=4:00:00
 def_shell=2d
 
 # qstat display settings
+qstat_bin=/glade/u/apps/opt/qstat-cache/qstat
 qstat_fmt="%-9.9s %-16s %2s %4s %7s %14s\n"
 qstat_labels="JobID Name S NCPU ReqMem Time(HH:MM)"
 qstat_splits="----- ---- - ---- ------ -------------"
@@ -133,10 +134,27 @@ function check_server {
     else
         >&2 echo "Error: unexpected output from VNC server. Cancelling job."
         qdel$ds $vnc_jobid >& /dev/null
+        check_job_status ""
         >&2 echo -e "VNC output:\n"
         >&2 cat .vncmgr/$job_name
         exit 1
     fi
+}
+
+function check_job_status {
+    SECONDS=0
+    
+    while true; do
+        if [[ $SECONDS -gt 5 ]]; then
+            job_status=$($qstat_bin $vnc_jobid | grep ^$vnc_jobid | awk '{print $5}')
+
+            if [[ $job_status == $1 ]]; then
+                break
+            fi
+
+            sleep 1
+        fi
+    done
 }
 
 function create_job {
@@ -191,13 +209,8 @@ function create_job {
     fi
 
     echo "Waiting for job to start ..."
-    
-    while [[ $job_status != R ]]; do
-        if [[ $SECONDS -gt 8 ]]; then
-            job_status=$(qstat $vnc_jobid | grep ^$vnc_jobid | awk '{print $5}')
-        fi
-    done 
 
+    check_job_status R
     check_server
 
     # Create tunnel file to be used for non VPN sessions
@@ -207,7 +220,7 @@ function create_job {
 }
 
 function display_job {
-time_left=$(qstat -w $vnc_jobid | grep "^$vnc_jobid" | awk '{print $11" / "$9}')
+time_left=$($qstat_bin -w $vnc_jobid | grep "^$vnc_jobid" | awk '{print $11" / "$9}')
 user_ip=$(pinky -f $USER | awk '{print $NF}')
 clear
 
@@ -268,7 +281,7 @@ fi
 function query_session {
     vnc_session=$(sed 's/vncs-//' <<< ${1:-default})
     job_name=vncs-$vnc_session
-    vnc_jobid=$(qstat -u $USER -w | awk -v name=$job_name '$4 ~ name { split($1, id, "."); print id[1] }')
+    vnc_jobid=$($qstat_bin -u $USER -w | awk -v name=$job_name '$4 ~ name { split($1, id, "."); print id[1] }')
 } 
 
 function query_job {
@@ -285,6 +298,8 @@ function kill_job {
     if [[ ${vnc_jobid}z != z ]]; then
         echo "Cancelling VNC session ($vnc_session) with job ID $vnc_jobid ..."
         qdel$ds $vnc_jobid >& /dev/null
+        echo "Waiting for job records to refresh ..."
+        check_job_status ""
     else
         >&2 echo "No session found with name $vnc_session"
     fi
@@ -305,7 +320,7 @@ function map_desktop {
 }
 
 function live_driver {
-    job_data=$(qstat -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}')
+    job_data=$($qstat_bin -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}')
     clear
     menu
 
@@ -368,7 +383,7 @@ if [[ $# -gt 0 ]]; then
         echo -e "\nActive servers, reported as PBS jobs:\n"
         printf "$qstat_fmt" $qstat_labels
         printf "$qstat_fmt" $qstat_splits
-        qstat -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}'
+        $qstat_bin -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}'
         echo
         exit
     fi
