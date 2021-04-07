@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   13:13, 31 Mar 2021
+#   Last Revised:   09:39, 07 Apr 2021
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -121,6 +121,8 @@ function check_server {
             >&2 echo "Error: server initialization timeout"
             exit 1
         fi
+
+        sleep 1
     done
 
     sleep 2
@@ -198,11 +200,13 @@ function create_job {
 
     echo "Creating new VNC session ($vnc_session) ..."
     envsubst '$desktop_setup $vnc_opts $my_dir' < $my_dir/.${job_shell}script > .vncmgr/script.pbs
+    echo -e "\n# User opts: vncmgr $user_args" >> .vncmgr/script.pbs
+    echo "# qsub opts: qsub$ds $job_args .vncmgr/script.pbs" >> .vncmgr/script.pbs
 
     # Submit batch script to PBS
     echo -e "\nSubmitting batch job to PBS"
     rm -f .vncmgr/$job_name
-    vnc_jobid=$(qsub$ds $job_args .vncmgr/script.pbs |& sed -n 's/\([0-9]*\).casper.*/\1/p'; exit ${PIPESTATUS[0]})
+    vnc_jobid=$(qsub$ds $job_args .vncmgr/script.pbs | sed -n 's/\([0-9]*\).casper.*/\1/p'; exit ${PIPESTATUS[0]})
 
     if [[ $? != 0 ]]; then
         exit 1
@@ -221,67 +225,53 @@ function create_job {
 
 function display_job {
 time_left=$($qstat_bin -w $vnc_jobid | grep "^$vnc_jobid" | awk '{print $11" / "$9}')
-user_ip=$(pinky -f $USER | awk '{print $NF}')
 clear
-
-if [[ $user_ip == 128.117* ]] && [[ $user_ip != 128.117.181* ]]; then
 cat << EOF
+Use *one* of the following methods to connect to your VNC session. Instructions
+are given for both direct remote access via tunneling and access via the UCAR VPN.
+(VPN instructions: https://www2.cisl.ucar.edu/user-support/vpn-access)
 
-You appear to be connected to the NCAR Internal Network either directly
-or via the NCAR VPN. Therefore, an SSH tunnel is not necessary to stream
-desktop data to your local computer.
+  SSH TUNNEL METHOD
 
-Please load a VNC viewer on your local machine (e.g., TurboVNC or TigerVNC),
-and connect to the following host:
-
-    $host_addr:$host_port
-
-The viewer will ask for a *one-time* password. Use the following:
-
-    $(ssh $host_addr "/usr/local/bin/vncpasswd -display :$host_disp -o |& cut -d ' ' -f5" | grep "^[0-9]")
-
-Warning: if you disconnect from the NCAR Internal Network or VPN, your
-         VNC connection will be disrupted.
-
-EOF
-else
-cat << EOF
-
-To activate the VNC session on your client machine (external network):
-
-  1) Create an SSH tunnel to stream desktop data to your local computer:
+  Create an SSH tunnel to stream desktop data to your local computer:
 
     ssh -l $USER -L $host_port:localhost4:$host_port $host_addr "bash ~/.vncmgr/tunnel-$vnc_session"
   
-  2) Follow instructions given in local terminal. The local terminal session
-     will hang after creating the tunnel. This behavior is normal.
+  Follow instructions given in local terminal. The local terminal session will
+  hang after creating the tunnel. This behavior is normal.
+
+  INTERNAL NETWORK METHOD
+
+  If you are connected to the Internal Network (on-site or via UCAR VPN), you
+  can simply load TurboVNC or TigerVNC and connect to the follow host:
+
+    $host_addr:$host_port
+
+  The viewer will ask for a *one-time* password. Use $(ssh $host_addr "/usr/local/bin/vncpasswd -display :$host_disp -o |& cut -d ' ' -f5" 2> /dev/null | grep "^[0-9]").
+
+  Warning: if you disconnect from the VPN, your VNC connection will be disrupted.
 
 If you disconnect from the VNC server and wish to reconnect, you will need to
-restart the tunnel to generate a new password. This VNC server will timeout and
-shut down automatically once wallclock limit is reached (${time_left}).
+generate a new password. This VNC server will timeout and shut down automatically
+once wallclock limit is reached (${time_left}).
 
-To end the PBS job and shut down the VNC server:
+To end the PBS job and shut down the VNC server, run:
 
-  1) Run "vncmgr kill $vnc_session"
-        
-        OR
-  
-     Use qdel to end the VNC server job:
-
-    qdel $vnc_jobid         (from Casper)
-    qdelcasper $vnc_jobid   (from Cheyenne)
-
-Note: you can avoid the tunneling step if using the NCAR internal network
-      or the NCAR VPN (https://www2.cisl.ucar.edu/user-support/vpn-access)
+  vncmgr kill $vnc_session
           
 EOF
-fi
 }
 
 function query_session {
     vnc_session=$(sed 's/vncs-//' <<< ${1:-default})
+    
+    if [[ ${#vnc_session} -gt 10 ]]; then
+        >&2 echo "Error: max session name length is 10 chars"
+        exit 1
+    fi
+
     job_name=vncs-$vnc_session
-    vnc_jobid=$($qstat_bin -u $USER -w | awk -v name=$job_name '$4 ~ name { split($1, id, "."); print id[1] }')
+    vnc_jobid=$($qstat_bin -u $USER -w | awk -v name=$job_name '$4 == name { split($1, id, "."); print id[1] }')
 } 
 
 function query_job {
@@ -328,11 +318,6 @@ function live_driver {
     echo
     history -s "${user_opts[@]}"
 
-    if [[ ${#user_opts[1]} -gt 10 ]]; then
-        >&2 echo "Error: max session name length is 10 chars"
-        exit 1
-    fi
-
     query_session ${user_opts[1]}
 
     if [[ create == ${user_opts[0]}* ]]; then
@@ -369,6 +354,7 @@ function live_driver {
 
 # Run in batch if arguments, otherwise use live mode
 if [[ $# -gt 0 ]]; then
+    user_args="$@"
     perm_msg="using -A flag"
 
     # Help flag intercept
@@ -389,12 +375,7 @@ if [[ $# -gt 0 ]]; then
     fi
 
     if [[ $1 =~ ^[^-].* ]]; then
-        if [[ ${#1} -le 10 ]]; then
-            user_sess=$1; shift
-        else
-            >&2 echo "Error: max session name length is 10 chars"
-            exit 1
-        fi
+        user_sess=$1; shift
     fi
 
     query_session $user_sess
