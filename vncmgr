@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   09:39, 07 Apr 2021
+#   Last Revised:   17:01, 07 Apr 2021
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -14,7 +14,7 @@ cd $HOME; mkdir -p .vncmgr
 
 # Set up cross-server submission
 if [[ $NCAR_HOST == cheyenne ]]; then
-    QSCACHE_SERVER=casper ds=casper
+    ds=casper
 else
     ds=
 fi
@@ -148,14 +148,14 @@ function check_job_status {
     
     while true; do
         if [[ $SECONDS -gt 5 ]]; then
-            job_status=$($qstat_bin $vnc_jobid | grep ^$vnc_jobid | awk '{print $5}')
+            job_status=$($qstat_bin @casper $vnc_jobid | grep ^$vnc_jobid | awk '{print $5}')
 
             if [[ $job_status == $1 ]]; then
                 break
             fi
-
-            sleep 1
         fi
+
+        sleep 1
     done
 }
 
@@ -224,7 +224,7 @@ function create_job {
 }
 
 function display_job {
-time_left=$($qstat_bin -w $vnc_jobid | grep "^$vnc_jobid" | awk '{print $11" / "$9}')
+time_left=$($qstat_bin @casper -w $vnc_jobid | grep "^$vnc_jobid" | awk '{print $11" / "$9}')
 clear
 cat << EOF
 Use *one* of the following methods to connect to your VNC session. Instructions
@@ -271,7 +271,7 @@ function query_session {
     fi
 
     job_name=vncs-$vnc_session
-    vnc_jobid=$($qstat_bin -u $USER -w | awk -v name=$job_name '$4 == name { split($1, id, "."); print id[1] }')
+    vnc_jobid=$($qstat_bin @casper -u $USER -w | awk -v name=$job_name '$4 == name { split($1, id, "."); print id[1] }')
 } 
 
 function query_job {
@@ -310,7 +310,7 @@ function map_desktop {
 }
 
 function live_driver {
-    job_data=$($qstat_bin -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}')
+    job_data=$($qstat_bin @casper -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}')
     clear
     menu
 
@@ -369,7 +369,7 @@ if [[ $# -gt 0 ]]; then
         echo -e "\nActive servers, reported as PBS jobs:\n"
         printf "$qstat_fmt" $qstat_labels
         printf "$qstat_fmt" $qstat_splits
-        $qstat_bin -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}'
+        $qstat_bin @casper -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}'
         echo
         exit
     fi
