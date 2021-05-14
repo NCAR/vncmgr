@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   17:01, 07 Apr 2021
+#   Last Revised:   09:28, 14 May 2021
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -258,7 +258,7 @@ once wallclock limit is reached (${time_left}).
 To end the PBS job and shut down the VNC server, run:
 
   vncmgr kill $vnc_session
-          
+
 EOF
 }
 
@@ -271,7 +271,7 @@ function query_session {
     fi
 
     job_name=vncs-$vnc_session
-    vnc_jobid=$($qstat_bin @casper -u $USER -w | awk -v name=$job_name '$4 == name { split($1, id, "."); print id[1] }')
+    vnc_jobid=$($qstat_bin @casper -u $USER -w | awk -v name=$job_name '$4 == name && $10 != "E" { split($1, id, "."); print id[1] }')
 } 
 
 function query_job {
@@ -310,7 +310,7 @@ function map_desktop {
 }
 
 function live_driver {
-    job_data=$($qstat_bin @casper -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}')
+    job_data=$($qstat_bin @casper -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ && $10 != "E" {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}')
     clear
     menu
 
@@ -369,7 +369,7 @@ if [[ $# -gt 0 ]]; then
         echo -e "\nActive servers, reported as PBS jobs:\n"
         printf "$qstat_fmt" $qstat_labels
         printf "$qstat_fmt" $qstat_splits
-        $qstat_bin @casper -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}'
+        $qstat_bin @casper -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ && $10 != "E" {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}'
         echo
         exit
     fi
