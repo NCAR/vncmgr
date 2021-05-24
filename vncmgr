@@ -4,13 +4,14 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   09:28, 14 May 2021
+#   Last Revised:   11:35, 24 May 2021
 #
 
 # Make sure environment is configured to run VNC jobs
 . /etc/profile >& /dev/null
 my_dir="$( cd "$(dirname "$0")" ; pwd )"
 cd $HOME; mkdir -p .vncmgr
+module load ncarenv
 
 # Set up cross-server submission
 if [[ $NCAR_HOST == cheyenne ]]; then
