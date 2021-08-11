@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   20:50, 10 Aug 2021
+#   Last Revised:   10:46, 11 Aug 2021
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -148,7 +148,7 @@ function check_job_status {
     SECONDS=0
     
     while true; do
-        if [[ $SECONDS -gt 5 ]]; then
+        if [[ $SECONDS -gt ${job_wait_time:-5} ]]; then
             job_status=$($qstat_bin @casper $vnc_jobid | grep ^$vnc_jobid | awk '{print $5}')
 
             if [[ $job_status == $1 ]]; then
@@ -259,7 +259,7 @@ are given for both direct remote access via tunneling and access via the UCAR VP
 
 If you disconnect from the VNC server and wish to reconnect, you will need to
 generate a new password. This VNC server will timeout and shut down automatically
-once wallclock limit is reached (${time_left}).
+once wallclock limit is reached (current elapsed -> ${time_left}).
 
 To end the PBS job and shut down the VNC server, run:
 
@@ -283,8 +283,8 @@ function query_session {
 function query_job {
     if [[ ${vnc_jobid}z != z ]]; then
         echo "Querying $vnc_session with job ID $vnc_jobid ..."
-        echo "Waiting for job to start ..."
-        check_job_status R
+        echo "Checking if job is in run state (otherwise wait) ..."
+        job_wait_time=0 check_job_status R
         check_server
         display_job
     else
