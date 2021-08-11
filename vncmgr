@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   11:35, 24 May 2021
+#   Last Revised:   20:04, 10 Aug 2021
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -278,6 +278,8 @@ function query_session {
 function query_job {
     if [[ ${vnc_jobid}z != z ]]; then
         echo "Querying $vnc_session with job ID $vnc_jobid ..."
+        echo "Waiting for job to start ..."
+        check_job_status R
         check_server
         display_job
     else
