@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   20:04, 10 Aug 2021
+#   Last Revised:   20:50, 10 Aug 2021
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -153,6 +153,11 @@ function check_job_status {
 
             if [[ $job_status == $1 ]]; then
                 break
+            fi
+
+            if [[ $SECONDS -eq 60 ]]; then
+                echo "Slow dispatch times; vis queue is likely busy ..."
+                echo "Consider quitting (Ctrl/Cmd-C) and querying later"
             fi
         fi
 
