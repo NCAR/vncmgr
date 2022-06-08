@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   10:46, 11 Aug 2021
+#   Last Revised:   16:56, 07 Jun 2022
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -12,13 +12,6 @@
 my_dir="$( cd "$(dirname "$0")" ; pwd )"
 cd $HOME; mkdir -p .vncmgr
 module load ncarenv
-
-# Set up cross-server submission
-if [[ $NCAR_HOST == cheyenne ]]; then
-    ds=casper
-else
-    ds=
-fi
 
 # Default values for jobs
 def_walltime=4:00:00
@@ -86,6 +79,19 @@ Examples
 EOF
 }
 
+function clean_kill {
+    if [[ -n $vnc_jobid ]]; then
+        if [[ $tfile_made == true ]]; then
+            echo "Server is initializing - run 'vncmgr query $vnc_session' to check status"
+        else
+            echo "Server not yet initialized; killing PBS job ..."
+            kill_job
+        fi
+    fi
+
+    exit 1
+}
+
 function menu {
 cat << EOF
 --------------------------------------------------------
@@ -136,7 +142,7 @@ function check_server {
         host_port=$((host_disp + 5900))
     else
         >&2 echo "Error: unexpected output from VNC server. Cancelling job."
-        qdel$ds $vnc_jobid >& /dev/null
+        qdel ${vnc_jobid}.$NCAR_PBS_CA >& /dev/null
         check_job_status ""
         >&2 echo -e "VNC output:\n"
         >&2 cat .vncmgr/$job_name
@@ -207,12 +213,12 @@ function create_job {
     echo "Creating new VNC session ($vnc_session) ..."
     envsubst '$desktop_setup $vnc_opts $my_dir' < $my_dir/.${job_shell}script > .vncmgr/script.pbs
     echo -e "\n# User opts: vncmgr $user_args" >> .vncmgr/script.pbs
-    echo "# qsub opts: qsub$ds $job_args .vncmgr/script.pbs" >> .vncmgr/script.pbs
+    echo "# qsub opts: qsub $job_args .vncmgr/script.pbs" >> .vncmgr/script.pbs
 
     # Submit batch script to PBS
     echo -e "\nSubmitting batch job to PBS"
     rm -f .vncmgr/$job_name
-    vnc_jobid=$(qsub$ds $job_args .vncmgr/script.pbs | sed -n 's/\([0-9]*\).casper.*/\1/p'; exit ${PIPESTATUS[0]})
+    vnc_jobid=$(qsub $job_args .vncmgr/script.pbs | sed -n 's/\([0-9]*\).casper.*/\1/p'; exit ${PIPESTATUS[0]})
 
     if [[ $? != 0 ]]; then
         exit 1
@@ -227,6 +233,7 @@ function create_job {
     export host_port host_disp vnc_jobid
     envsubst '$host_port $host_disp $vnc_jobid' < $my_dir/.vnctunnel > .vncmgr/tunnel-$vnc_session
     chmod u+x .vncmgr/tunnel-$vnc_session
+    tfile_made=true
 }
 
 function display_job {
@@ -295,7 +302,7 @@ function query_job {
 function kill_job {
     if [[ ${vnc_jobid}z != z ]]; then
         echo "Cancelling VNC session ($vnc_session) with job ID $vnc_jobid ..."
-        qdel$ds $vnc_jobid >& /dev/null
+        qdel ${vnc_jobid}.$NCAR_PBS_CA >& /dev/null
         echo "Waiting for job records to refresh ..."
         check_job_status ""
     else
@@ -359,6 +366,8 @@ function live_driver {
     
     read -n 1 -r -s -p 'Press enter to continue...'
 }
+
+trap clean_kill SIGINT SIGTERM
 
 # Run in batch if arguments, otherwise use live mode
 if [[ $# -gt 0 ]]; then
