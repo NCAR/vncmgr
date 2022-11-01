@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   16:56, 07 Jun 2022
+#   Last Revised:   09:22, 01 Nov 2022
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -15,7 +15,7 @@ module load ncarenv
 
 # Default values for jobs
 def_walltime=4:00:00
-def_shell=2d
+def_shell=startkde
 
 # qstat display settings
 qstat_bin=/glade/u/apps/opt/qstat-cache/qstat
@@ -173,23 +173,35 @@ function check_job_status {
 
 function create_job {
     # Make sure job_opts includes necessary settings
-    if [[ $job_opts == *":ngpus="* ]]; then
-        if [[ ! $job_opts =~ .*:ngpus=1[:\ ].* ]]; then
+    if [[ ${VNCMGR_BYPASS_CHECKS,,} != true ]]; then
+        if [[ $job_opts == *":ngpus="* ]]; then
+            if [[ ! $job_opts =~ .*:ngpus=1[:\ ].* ]]; then
+                opt_msg=True
+                echo "Resource chunks must have ngpus=1; altering custom PBS options ..."
+                job_opts=$(sed 's|:ngpus=[1-9]*|:ngpus=1|' <<< $job_opts)
+            fi
+        elif [[ $job_opts == *"select="* ]]; then
             opt_msg=True
             echo "Resource chunks must have ngpus=1; altering custom PBS options ..."
-            job_opts=$(sed 's|:ngpus=[1-9]*|:ngpus=1|' <<< $job_opts)
+            job_opts=$(sed 's|\(select=[^ ]*\)|\1:ngpus=1|' <<< $job_opts)
         fi
-    elif [[ $job_opts == *"select="* ]]; then
-        opt_msg=True
-        echo "Resource chunks must have ngpus=1; altering custom PBS options ..."
-        job_opts=$(sed 's|\(select=[^ ]*\)|\1:ngpus=1|' <<< $job_opts)
-    fi
 
-    if [[ $job_opts == *"gpu_type="* ]]; then
-        if [[ $job_opts != *"gpu_type=gp100"* ]]; then
-            opt_msg=True
-            echo "gpu_type must be set to gp100; altering custom PBS options ..."
-            job_opts=$(sed 's|gpu_type=[^ ]*|gpu_type=gp100|' <<< $job_opts)
+        if [[ $job_opts == *"gpu_type="* ]]; then
+            if [[ $job_opts != *"gpu_type=gp100"* ]]; then
+                opt_msg=True
+                echo "gpu_type must be set to gp100; altering custom PBS options ..."
+                job_opts=$(sed 's|gpu_type=[^ ]*|gpu_type=gp100|' <<< $job_opts)
+            fi
+        fi
+
+        if [[ $job_opts == *"-q"* ]]; then
+            vncmgr_queue=$(sed -n -E 's|.*-q ?([^ ]*).*|\1|p' <<< $job_opts)
+            
+            if [[ $vncmgr_queue != casper@casper-pbs ]]; then
+                opt_msg=True
+                echo "-q must be set to casper@casper-pbs; altering custom PBS options ..."
+                job_opts=$(sed -E 's|-q ?[^ ]*|-q casper@casper-pbs|' <<< $job_opts)
+            fi
         fi
     fi
 
@@ -197,7 +209,6 @@ function create_job {
         echo "New job-opts = $job_opts"
     fi
 
-    job_shell=$(echo ${SHELL##*/} | sed 's/tcsh/csh/')
     job_project=${job_project:-$DAV_PROJECT}
     job_walltime=${job_walltime:-$def_walltime}
     job_args="$job_opts -A $job_project -l walltime=$job_walltime -N $job_name -o .vncmgr/$job_name"
@@ -211,7 +222,7 @@ function create_job {
     fi
 
     echo "Creating new VNC session ($vnc_session) ..."
-    envsubst '$desktop_setup $vnc_opts $my_dir' < $my_dir/.${job_shell}script > .vncmgr/script.pbs
+    envsubst '$desktop_setup $vnc_opts $my_dir' < $my_dir/.jobscript > .vncmgr/script.pbs
     echo -e "\n# User opts: vncmgr $user_args" >> .vncmgr/script.pbs
     echo "# qsub opts: qsub $job_args .vncmgr/script.pbs" >> .vncmgr/script.pbs
 
