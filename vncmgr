@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   09:22, 01 Nov 2022
+#   Last Revised:   12:15, 18 Jan 2023
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -197,7 +197,7 @@ function create_job {
         if [[ $job_opts == *"-q"* ]]; then
             vncmgr_queue=$(sed -n -E 's|.*-q ?([^ ]*).*|\1|p' <<< $job_opts)
             
-            if [[ $vncmgr_queue != casper@casper-pbs ]]; then
+            if [[ $vncmgr_queue != casper@casper-pbs ]] && [[ $csg_mode != true ]]; then
                 opt_msg=True
                 echo "-q must be set to casper@casper-pbs; altering custom PBS options ..."
                 job_opts=$(sed -E 's|-q ?[^ ]*|-q casper@casper-pbs|' <<< $job_opts)
@@ -436,6 +436,10 @@ if [[ $# -gt 0 ]]; then
                         ;;
                     -v|--vnc-opts*)
                         [[ $1 == *=* ]] && vnc_opts=${1#*=} || read_value=vnc_opts
+                        ;;
+                    --csg)
+                        csg_mode=true
+                        job_opts="-q system $job_opts"
                         ;;
                     *)
                         >&2 echo "Error: unrecognized argument to create ($1)"
