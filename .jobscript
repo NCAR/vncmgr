@@ -9,7 +9,7 @@ module restore >& /dev/null
 export XDG_RUNTIME_DIR=${HOME}/.vnc/xdg-$PBS_JOBID
 export XDG_SESSION_ID=
 export LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH
-export PATH=/usr/local/bin/:$PATH
+export PATH=/usr/local/bin:/usr/bin:/bin:/opt/pbs/bin
 export TVNC_VGL=1
 
 # Create storage and clean up startup script if exists
