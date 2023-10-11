@@ -1,5 +1,5 @@
 #!/bin/bash
-#PBS -l select=1:ncpus=1:ngpus=1
+#PBS -l select=1:ncpus=1:ngpus=1:os=opensuse15
 #PBS -q casper@casper-pbs
 #PBS -l gpu_type=gp100
 #PBS -j oe
@@ -8,7 +8,7 @@ module restore >& /dev/null
 
 export XDG_RUNTIME_DIR=${HOME}/.vnc/xdg-$PBS_JOBID
 export XDG_SESSION_ID=
-export LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH
+export VGL_GLLIB=/usr/lib64/libGL.so.1
 export PATH=/usr/local/bin:/usr/bin:/bin:/opt/pbs/bin
 export TVNC_VGL=1
 
@@ -16,12 +16,13 @@ export TVNC_VGL=1
 mkdir -p $XDG_RUNTIME_DIR
 rm -f ${HOME}/.vnc/xstartup.turbovnc
 
-XDISP=$(env $desktop_setup vncserver $vnc_opts 2>&1)
+XDISP=$(vncserver -SecurityTypes OTP $vnc_opts 2>&1)
 
 if [[ $? != 0 ]]; then
     echo "Error: $XDISP"
     exit
 else
+    chmod 7700 $XDG_RUNTIME_DIR
     XDISP="vncmgr-display $(echo $XDISP | awk -F '/' '{print $NF}' | cut -d '.' -f1)"
 fi
 
