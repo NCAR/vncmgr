@@ -4,12 +4,12 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   16:19, 11 Oct 2023
+#   Last Revised:   16:27, 11 Oct 2023
 #
 
 # Make sure environment is configured to run VNC jobs
 . /etc/profile >& /dev/null
-my_root="$( cd "$(dirname "$0")"/.. ; pwd )"
+my_root="$( cd "$(dirname $(readlink -f "$0"))"/.. ; pwd )"
 cd $HOME; mkdir -p .vncmgr
 module -q load ncarenv
 
