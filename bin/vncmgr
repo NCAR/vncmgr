@@ -4,12 +4,12 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   13:35, 07 Sep 2023
+#   Last Revised:   16:19, 11 Oct 2023
 #
 
 # Make sure environment is configured to run VNC jobs
 . /etc/profile >& /dev/null
-my_dir="$( cd "$(dirname "$0")" ; pwd )"
+my_root="$( cd "$(dirname "$0")"/.. ; pwd )"
 cd $HOME; mkdir -p .vncmgr
 module -q load ncarenv
 
@@ -72,7 +72,7 @@ Examples
 
 3. Run in interactive mode from outside Cheyenne:
 
-    ssh -t -L $USER cheyenne.ucar.edu $my_dir/vncmgr
+    ssh -t -L $USER cheyenne.ucar.edu $my_root/bin/vncmgr
 
 EOF
 }
@@ -245,7 +245,7 @@ function create_job {
     job_project=${job_project:-$DAV_PROJECT}
     job_walltime=${job_walltime:-$def_walltime}
     job_args="$job_opts -A $job_project -l walltime=$job_walltime -N $job_name -o .vncmgr/$job_name"
-    export vnc_opts my_dir
+    export vnc_opts my_root
 
     if [[ -z $job_project ]]; then
         >&2 echo -e "\nError: no valid project account given for PBS job"
@@ -254,7 +254,7 @@ function create_job {
     fi
 
     echo "Creating new VNC session ($vnc_session) ..."
-    envsubst '$vnc_opts $my_dir' < $my_dir/.jobscript > .vncmgr/script.pbs
+    envsubst '$vnc_opts $my_root' < $my_root/etc/.jobscript > .vncmgr/script.pbs
     echo -e "\n# User opts: vncmgr $user_args" >> .vncmgr/script.pbs
     echo "# qsub opts: qsub $job_args .vncmgr/script.pbs" >> .vncmgr/script.pbs
 
@@ -274,7 +274,7 @@ function create_job {
 
     # Create tunnel file to be used for non VPN sessions
     export host_port host_disp vnc_jobid
-    envsubst '$host_port $host_disp $vnc_jobid' < $my_dir/.vnctunnel > .vncmgr/tunnel-$vnc_session
+    envsubst '$host_port $host_disp $vnc_jobid' < $my_root/etc/.vnctunnel > .vncmgr/tunnel-$vnc_session
     chmod u+x .vncmgr/tunnel-$vnc_session
     tfile_made=true
 }

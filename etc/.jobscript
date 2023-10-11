@@ -30,4 +30,4 @@ echo $XDISP
 
 XDISP=$(echo $XDISP | cut -d ':' -f2)
 
-exec /bin/bash $my_dir/.vnckill $XDISP
+exec /bin/bash $my_root/etc/.vnckill $XDISP
