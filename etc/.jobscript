@@ -13,6 +13,10 @@ export PATH=/usr/local/bin:/usr/bin:/bin:/opt/pbs/bin
 export TVNC_VGL=1
 export TVNC_WM=startplasma-x11
 
+# Make sure CSH shell will initalize in Konsole
+export loginsh=1
+unset CSHRCREAD
+
 # Create storage and clean up startup script if exists
 mkdir -p $XDG_RUNTIME_DIR
 rm -f ${HOME}/.vnc/xstartup.turbovnc

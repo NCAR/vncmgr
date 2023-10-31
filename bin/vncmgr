@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   16:27, 11 Oct 2023
+#   Last Revised:   10:51, 31 Oct 2023
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -394,6 +394,19 @@ function live_driver {
     read -n 1 -r -s -p 'Press enter to continue...'
 }
 
+function desktop_message {
+cat << EOF
+
+Deprecation Error!
+    The -d/--desktop option is no longer supported by vncmgr, as of
+    the October 2023 Casper maintenance. You will be assigned a KDE
+    Plasma5 desktop. GNOME2/3 options have been removed to increase
+    usable memory on the visualization nodes.
+
+EOF
+exit
+}
+
 trap clean_kill SIGINT SIGTERM
 
 # Run in batch if arguments, otherwise use live mode
@@ -448,6 +461,9 @@ if [[ $# -gt 0 ]]; then
                         ;;
                     -v|--vnc-opts*)
                         [[ $1 == *=* ]] && vnc_opts=${1#*=} || read_value=vnc_opts
+                        ;;
+                    -d|--desktop*)
+                        desktop_message
                         ;;
                     --csg)
                         csg_mode=true
