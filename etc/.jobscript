@@ -4,14 +4,13 @@
 #PBS -l gpu_type=gp100
 #PBS -j oe
 
-module restore >& /dev/null
-
 export XDG_RUNTIME_DIR=${HOME}/.vnc/xdg-$PBS_JOBID
 export XDG_SESSION_ID=
-#export VGL_GLLIB=/usr/lib64/libGL.so.1
 export PATH=/usr/local/bin:/usr/bin:/bin:/opt/pbs/bin
 export TVNC_VGL=1
 export TVNC_WM=startplasma-x11
+
+module restore >& /dev/null
 
 # Make sure CSH shell will initalize in Konsole
 export loginsh=1
