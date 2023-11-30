@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   10:51, 31 Oct 2023
+#   Last Revised:   14:13, 29 Nov 2023
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -57,6 +57,9 @@ Create Command Options
                                 will perist (man qsub for format)
         -j, --job-opts="OPTS"   additional arguments to pass to the
                                 qsub command (see man qsub)
+        -g, --gl-desktop        initialize the desktop using
+                                VirtualGL (any apps launched will
+                                natively use VirtualGL)*
         -v, --vnc-opts="OPTS"   arguments to pass to the vncserver
                                 command (see man vncserver)
 
@@ -73,6 +76,16 @@ Examples
 3. Run in interactive mode from outside Cheyenne:
 
     ssh -t -L $USER cheyenne.ucar.edu $my_root/bin/vncmgr
+
+
+* Using VirtualGL rendering for the desktop can lead to increased
+  performance for applications that use OpenGL. However, it can also
+  cause launch errors for some applications that use X11 but do not
+  use OpenGL. If you do not use VirtualGL desktop rendering, you may
+  still start applications with VirtualGL acceleration by prepending
+  the program name with "vglrun":
+
+      vglrun vapor
 
 EOF
 }
@@ -253,8 +266,14 @@ function create_job {
         exit 1
     fi
 
+    if [[ ${vgl_desktop,,} == yes ]]; then
+        export vgl_desktop=1
+    else
+        export vgl_desktop=0
+    fi
+
     echo "Creating new VNC session ($vnc_session) ..."
-    envsubst '$vnc_opts $my_root' < $my_root/etc/.jobscript > .vncmgr/script.pbs
+    envsubst '$vnc_opts $my_root $vgl_desktop' < $my_root/etc/.jobscript > .vncmgr/script.pbs
     echo -e "\n# User opts: vncmgr $user_args" >> .vncmgr/script.pbs
     echo "# qsub opts: qsub $job_args .vncmgr/script.pbs" >> .vncmgr/script.pbs
 
@@ -376,6 +395,7 @@ function live_driver {
 
             read -e -p "Enter project code for VNC job (default=$DAV_PROJECT): " job_project
             read -e -p "Enter time limit for VNC job (default=$def_walltime): " job_walltime
+            read -e -p "Initialize desktop using VirtualGL? (default=no): " vgl_desktop
             read -e -p "Additional PBS arguments for VNC job (optional): " job_opts
             read -e -p "Arguments to forward to vncserver program (optional): " vnc_opts
             echo
@@ -464,6 +484,9 @@ if [[ $# -gt 0 ]]; then
                         ;;
                     -d|--desktop*)
                         desktop_message
+                        ;;
+                    -g|--gl-desktop)
+                        vgl_desktop=yes
                         ;;
                     --csg)
                         csg_mode=true

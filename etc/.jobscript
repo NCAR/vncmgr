@@ -7,8 +7,9 @@
 export XDG_RUNTIME_DIR=${HOME}/.vnc/xdg-$PBS_JOBID
 export XDG_SESSION_ID=
 export PATH=/usr/local/bin:/usr/bin:/bin:/opt/pbs/bin
-export TVNC_VGL=1
+export TVNC_VGL=$vgl_desktop
 export TVNC_WM=startplasma-x11
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64
 
 module restore >& /dev/null
 
