@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   14:13, 29 Nov 2023
+#   Last Revised:   08:50, 21 Jun 2024
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -171,7 +171,7 @@ function check_server {
     host_info=$(grep --color=never vncmgr-display .vncmgr/$job_name | awk '{print $2}')
 
     if [[ -n $host_info ]]; then
-        host_addr=${host_info%:*}.ucar.edu
+        host_addr=${host_info%:*}.hpc.ucar.edu
         host_disp=${host_info#*:}
         host_port=$((host_disp + 5900))
     else
