@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   15:59, 30 Jun 2024
+#   Last Revised:   14:52, 02 Jul 2024
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -500,7 +500,7 @@ if [[ $# -gt 0 ]]; then
                     -g|--gl-desktop)
                         vgl_desktop=yes
                         ;;
-                    -m|--gpu-model)
+                    -m|--gpu-model*)
                         [[ $1 == *=* ]] && gpu_model=${1#*=} || read_value=gpu_model
                         ;;
                     --csg)
