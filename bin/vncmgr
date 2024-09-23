@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   14:52, 02 Jul 2024
+#   Last Revised:   08:53, 23 Sep 2024
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -179,7 +179,7 @@ function check_server {
     else
         >&2 echo "Error: unexpected output from VNC server. Cancelling job."
         qdel ${vnc_jobid}.casper-pbs >& /dev/null
-        check_job_status ""
+        check_job_status F
         >&2 echo -e "VNC output:\n"
         >&2 cat .vncmgr/$job_name
         exit 1
@@ -191,10 +191,15 @@ function check_job_status {
     
     while true; do
         if [[ $SECONDS -gt ${job_wait_time:-5} ]]; then
-            job_status=$($qstat_bin @casper $vnc_jobid | grep ^$vnc_jobid | awk '{print $5}')
+            job_status=$($qstat_bin -x @casper $vnc_jobid | grep ^$vnc_jobid | awk '{print $5}')
 
             if [[ $job_status == $1 ]]; then
                 break
+            elif [[ $job_status == F ]] && [[ $1 != F ]]; then
+                >&2 echo "Error: job has finished unexpectedly. Checking for errors..."
+                >&2 echo -e "VNC output:\n"
+                >&2 cat .vncmgr/$job_name
+                exit 1
             fi
 
             if [[ $SECONDS -eq 60 ]]; then
@@ -377,7 +382,7 @@ function kill_job {
         echo "Cancelling VNC session ($vnc_session) with job ID $vnc_jobid ..."
         qdel ${vnc_jobid}.casper-pbs >& /dev/null
         echo "Waiting for job records to refresh ..."
-        check_job_status ""
+        check_job_status F
     else
         >&2 echo "No session found with name $vnc_session"
     fi
