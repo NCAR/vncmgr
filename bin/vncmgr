@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   10:10, 23 Jul 2025
+#   Last Revised:   12:03, 23 Jul 2025
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -21,7 +21,7 @@ qstat_bin=/glade/u/apps/opt/qstat-cache/default/bin/qstat
 qstat_fmt="%-9.9s %-16s %2s %4s %7s %14s\n"
 qstat_labels="JobID Name S NCPU ReqMem Time(HH:MM)"
 qstat_splits="----- ---- - ---- ------ -------------"
-export QSCACHE_DEBUG=0
+unset QSCACHE_DEBUG
 
 function usage {
 cat << EOF
@@ -187,11 +187,12 @@ function check_server {
 }
 
 function check_job_status {
-    SECONDS=0
+    SECONDS=0 notice_printed=0
     
     while true; do
         if [[ $SECONDS -gt ${job_wait_time:-5} ]]; then
-            job_status=$($qstat_bin -x @casper $vnc_jobid | grep ^$vnc_jobid | awk '{print $5}')
+            job_status=$($qstat_bin -x ${vnc_jobid}.casper 2> /dev/null| grep ^$vnc_jobid | awk '{print $5}'; exit ${PIPESTATUS[0]})
+            qstat_status=$?
 
             if [[ $job_status == $1 ]]; then
                 break
@@ -200,11 +201,16 @@ function check_job_status {
                 >&2 echo -e "VNC output:\n"
                 >&2 cat .vncmgr/$job_name
                 exit 1
+            elif [[ $qstat_status -ne 0 ]]; then
+                exit 1
             fi
 
-            if [[ $SECONDS -eq 60 ]]; then
+            if [[ $SECONDS -gt 60 ]] && [[ $notice_printed -ne 1 ]]; then
+                echo
                 echo "Slow dispatch times; vis queue is likely busy ..."
                 echo "Consider quitting (Ctrl/Cmd-C) and querying later"
+                echo
+                notice_printed=1
             fi
         fi
 
@@ -315,7 +321,7 @@ function create_job {
 }
 
 function display_job {
-time_left=$($qstat_bin @casper -w $vnc_jobid | grep "^$vnc_jobid" | awk '{print $11" / "$9}')
+time_left=$($qstat_bin -w ${vnc_jobid}.casper | grep "^$vnc_jobid" | awk '{print $11" / "$9}')
 clear
 cat << EOF
 Use *one* of the following methods to connect to your VNC session. Instructions
