@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   08:53, 23 Sep 2024
+#   Last Revised:   10:10, 23 Jul 2025
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -17,7 +17,7 @@ module -q load ncarenv
 def_walltime=4:00:00
 
 # qstat display settings
-qstat_bin=/glade/u/apps/opt/qstat-cache/qstat
+qstat_bin=/glade/u/apps/opt/qstat-cache/default/bin/qstat
 qstat_fmt="%-9.9s %-16s %2s %4s %7s %14s\n"
 qstat_labels="JobID Name S NCPU ReqMem Time(HH:MM)"
 qstat_splits="----- ---- - ---- ------ -------------"
