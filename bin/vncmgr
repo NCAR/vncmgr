@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   12:03, 23 Jul 2025
+#   Last Revised:   22:54, 18 Sep 2025
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -17,7 +17,7 @@ module -q load ncarenv
 def_walltime=4:00:00
 
 # qstat display settings
-qstat_bin=/glade/u/apps/opt/qstat-cache/default/bin/qstat
+qstat_bin=/opt/pbs/bin/qstat
 qstat_fmt="%-9.9s %-16s %2s %4s %7s %14s\n"
 qstat_labels="JobID Name S NCPU ReqMem Time(HH:MM)"
 qstat_splits="----- ---- - ---- ------ -------------"
@@ -93,16 +93,23 @@ EOF
 }
 
 function clean_kill {
-    if [[ -n $vnc_jobid ]]; then
+    if [[ -n $vnc_jobid ]] && [[ $running_mode == create ]]; then
         if [[ $tfile_made == true ]]; then
             echo "Server is initializing - run 'vncmgr query $vnc_session' to check status"
         else
-            echo "Server not yet initialized; killing PBS job ..."
-            kill_job
+            echo "Server not yet initialized ..."
+            read -e -p "Do you wish to let it continue queuing (y/N)? " keep_going
+            keep_going=${keep_going:-n}
+
+            if [[ ${keep_going,,} == n* ]]; then
+                kill_job
+            fi
         fi
     fi
 
-    exit 1
+    if [[ $running_mode != killing ]]; then
+        exit 1
+    fi
 }
 
 function menu {
@@ -191,30 +198,35 @@ function check_job_status {
     
     while true; do
         if [[ $SECONDS -gt ${job_wait_time:-5} ]]; then
-            job_status=$($qstat_bin -x ${vnc_jobid}.casper 2> /dev/null| grep ^$vnc_jobid | awk '{print $5}'; exit ${PIPESTATUS[0]})
-            qstat_status=$?
+            job_status=$($qstat_bin -x ${vnc_jobid}.casper-pbs 2> /dev/null | grep ^$vnc_jobid | awk '{print $5}'; exit ${PIPESTATUS[0]})
+            qsub_status=$?
 
             if [[ $job_status == $1 ]]; then
                 break
-            elif [[ $job_status == F ]] && [[ $1 != F ]]; then
-                >&2 echo "Error: job has finished unexpectedly. Checking for errors..."
-                >&2 echo -e "VNC output:\n"
-                >&2 cat .vncmgr/$job_name
-                exit 1
-            elif [[ $qstat_status -ne 0 ]]; then
-                exit 1
+            elif [[ $job_status == F ]] || [[ $qsub_status == 35 ]]; then
+                if [[ $1 != F ]]; then
+                    >&2 echo "Error: job has finished unexpectedly. Checking for errors..."
+                    >&2 echo -e "VNC output:\n"
+                    >&2 cat .vncmgr/$job_name
+                    exit 1
+                else
+                    exit
+                fi
             fi
 
-            if [[ $SECONDS -gt 60 ]] && [[ $notice_printed -ne 1 ]]; then
-                echo
-                echo "Slow dispatch times; vis queue is likely busy ..."
-                echo "Consider quitting (Ctrl/Cmd-C) and querying later"
-                echo
-                notice_printed=1
+            if [[ $job_status == R ]]; then
+                if [[ $SECONDS -gt 60 ]] && [[ $notice_printed -ne 1 ]]; then
+                    echo
+                    echo "Slow dispatch times; vis queue may be busy ..."
+                    echo "Consider quitting (Ctrl/Cmd-C) and querying later"
+                    echo "The job will continue to queue if you quit vncmgr"
+                    echo
+                    notice_printed=1
+                fi
             fi
         fi
 
-        sleep 1
+        sleep 5
     done
 }
 
@@ -321,7 +333,7 @@ function create_job {
 }
 
 function display_job {
-time_left=$($qstat_bin -w ${vnc_jobid}.casper | grep "^$vnc_jobid" | awk '{print $11" / "$9}')
+time_left=$($qstat_bin -w ${vnc_jobid}.casper-pbs | grep "^$vnc_jobid" | awk '{print $11" / "$9}')
 clear
 cat << EOF
 Use *one* of the following methods to connect to your VNC session. Instructions
@@ -368,7 +380,7 @@ function query_session {
     fi
 
     job_name=vncs-$vnc_session
-    vnc_jobid=$($qstat_bin @casper -u $USER -w | awk -v name=$job_name '$4 == name && $10 != "E" { split($1, id, "."); print id[1] }')
+    vnc_jobid=$($qstat_bin @casper-pbs -u $USER -w | awk -v name=$job_name '$4 == name && $10 != "E" { split($1, id, "."); print id[1] }')
 } 
 
 function query_job {
@@ -385,6 +397,7 @@ function query_job {
 
 function kill_job {
     if [[ ${vnc_jobid}z != z ]]; then
+        running_mode=killing
         echo "Cancelling VNC session ($vnc_session) with job ID $vnc_jobid ..."
         qdel ${vnc_jobid}.casper-pbs >& /dev/null
         echo "Waiting for job records to refresh ..."
@@ -395,7 +408,7 @@ function kill_job {
 }
 
 function live_driver {
-    job_data=$($qstat_bin @casper -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ && $10 != "E" {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}')
+    job_data=$($qstat_bin @casper-pbs -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ && $10 != "E" {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}')
     clear
     menu
 
@@ -423,6 +436,7 @@ function live_driver {
             read -e -p "Arguments to forward to vncserver program (optional): " vnc_opts
             echo
 
+            running_mode=create
             create_job
             display_job
         fi
@@ -469,7 +483,7 @@ if [[ $# -gt 0 ]]; then
         echo -e "\nActive servers, reported as PBS jobs:\n"
         printf "$qstat_fmt" $qstat_labels
         printf "$qstat_fmt" $qstat_splits
-        $qstat_bin @casper -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ && $10 != "E" {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}'
+        $qstat_bin @casper-pbs -u $USER -w | awk -v qf="$qstat_fmt" '$4 ~ /vncs-/ && $10 != "E" {split($1, id, "."); printf qf, id[1], $4, $10, $7, $8, $11" / "$9}'
         echo
         exit
     fi
@@ -533,6 +547,7 @@ if [[ $# -gt 0 ]]; then
             shift
         done
 
+        running_mode=create
         create_job
         display_job
     elif [[ query == $sub_com* ]]; then
