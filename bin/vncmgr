@@ -4,7 +4,7 @@
 #   VNC sessions on the Casper cluster.
 #
 #   Author:         Brian Vanderwende
-#   Last Revised:   22:54, 18 Sep 2025
+#   Last Revised:   22:31, 03 Nov 2025
 #
 
 # Make sure environment is configured to run VNC jobs
@@ -60,8 +60,8 @@ Create Command Options
         -g, --gl-desktop        initialize the desktop using
                                 VirtualGL (any apps launched will
                                 natively use VirtualGL)*
-        -m, --gpu-model         specify which GPU to use:
-                                gp100 (default), l40
+        -m, --gpu-type          specify which GPU type to use:
+                                vis (default), gp100, l40
         -v, --vnc-opts="OPTS"   arguments to pass to the vncserver
                                 command (see man vncserver)
 
@@ -232,12 +232,12 @@ function check_job_status {
 
 function create_job {
     # Make sure job_opts includes necessary settings
-    gpu_model=${gpu_model:-gp100}
+    gpu_model=${gpu_model:-vis}
 
     if [[ ${VNCMGR_BYPASS_CHECKS,,} != true ]]; then
-        if [[ ! $gpu_model =~ (gp100|l40) ]]; then
+        if [[ ! $gpu_model =~ (vis|any|gp100|l40) ]]; then
             >&2 echo -e "\nError: invalid gpu_model specified ($gpu_model)"
-            >&2 echo "       Valid options include gp100, l40"
+            >&2 echo "       Valid options include vis, gp100, l40"
             exit 1
         fi
 
@@ -254,18 +254,22 @@ function create_job {
                 job_opts=$(sed 's|\(select=[^ ]*\)|\1:ngpus=1|' <<< $job_opts)
             fi
 
+            if [[ $job_opts == *":gpu_type="* ]]; then
+                if [[ ! $job_opts =~ gpu_type=(vis|gp100|l40) ]]; then
+                    opt_msg=True
+                    echo "gpu_type must be set to vis, gp100 or l40; altering custom PBS options ..."
+                    job_opts=$(sed "s|gpu_type=[^ ]*|gpu_type=$gpu_model|" <<< $job_opts)
+                fi
+            else
+                opt_msg=True
+                echo "Resource chunks should set gpu_type; altering custom PBS options ..."
+                job_opts=$(sed 's|\(select=[^ ]*\)|\1:gpu_type=vis|' <<< $job_opts)
+            fi
+
             if [[ $job_opts == *":os="* ]]; then
                 opt_msg=True
                 echo "Chunks must specify os type; altering custom PBS options ..."
                 job_opts=$(sed 's|\(select=[^ ]*\)|\1:os=opensuse15|' <<< $job_opts)
-            fi
-        fi
-
-        if [[ $job_opts == *"gpu_type="* ]]; then
-            if [[ ! $job_opts =~ gpu_type=(gp100|l40) ]]; then
-                opt_msg=True
-                echo "gpu_type must be set to gp100 or l40; altering custom PBS options ..."
-                job_opts=$(sed "s|gpu_type=[^ ]*|gpu_type=$gpu_model|" <<< $job_opts)
             fi
         fi
 
@@ -307,12 +311,13 @@ function create_job {
 
     echo "Creating new VNC session ($vnc_session) ..."
     envsubst '$vnc_opts $my_root $vgl_desktop' < $my_root/etc/.jobscript > .vncmgr/script.pbs
-    sed -i "s/%GPU%/$gpu_model/g" .vncmgr/script.pbs
+    sed -i "s/%GPU%/${gpu_model/any/vis}/g" .vncmgr/script.pbs
     echo -e "\n# User opts: vncmgr $user_args" >> .vncmgr/script.pbs
     echo "# qsub opts: qsub $job_args .vncmgr/script.pbs" >> .vncmgr/script.pbs
 
     # Submit batch script to PBS
-    echo -e "\nSubmitting batch job to PBS"
+    echo "Submitting batch job to PBS with following arguments:"
+    echo -e "    qsub $job_args .vncmgr/script.pbs\n"
     rm -f .vncmgr/$job_name
     vnc_jobid=$(qsub $job_args .vncmgr/script.pbs | sed -n 's/\([0-9]*\).casper.*/\1/p'; exit ${PIPESTATUS[0]})
 
@@ -430,7 +435,7 @@ function live_driver {
 
             read -e -p "Enter project code for VNC job (default=$DAV_PROJECT): " job_project
             read -e -p "Enter time limit for VNC job (default=$def_walltime): " job_walltime
-            read -e -p "Which GPU to use - gp100 or l40? (default=gp100): " gpu_model
+            read -e -p "Which GPU to use - any, gp100, l40? (default=any): " gpu_model
             read -e -p "Initialize desktop using VirtualGL? (default=no): " vgl_desktop
             read -e -p "Additional PBS arguments for VNC job (optional): " job_opts
             read -e -p "Arguments to forward to vncserver program (optional): " vnc_opts
@@ -525,7 +530,7 @@ if [[ $# -gt 0 ]]; then
                     -g|--gl-desktop)
                         vgl_desktop=yes
                         ;;
-                    -m|--gpu-model*)
+                    -m|--gpu-type*|--gpu-model*)
                         [[ $1 == *=* ]] && gpu_model=${1#*=} || read_value=gpu_model
                         ;;
                     --csg)
