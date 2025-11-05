@@ -23,7 +23,7 @@ Make sure you close TurboVNC before you kill the tunnel!
 EOF
 
 while true; do
-    if [[ $(qstat ${vnc_jobid}.casper | grep ^$vnc_jobid | awk '{print $5}') != R ]]; then
+    if [[ $(qstat ${vnc_jobid}.casper-pbs | grep ^$vnc_jobid | awk '{print $5}') != R ]]; then
         echo "VNC job has finished. Killing tunnel."
         break
     fi
