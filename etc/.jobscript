@@ -10,6 +10,11 @@ export TVNC_VGL=$vgl_desktop
 export TVNC_WM=startplasma-x11
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64
 
+# Hack to avoid issue b/c libvglfaker.so doesn't link to libGL
+if [[ $TVNC_VGL -eq 1 ]]; then
+    export TVNC_VGLRUN="vglrun +wm -ldp libGL.so.1"
+fi
+
 module restore >& /dev/null
 
 # Make sure CSH shell will initalize in Konsole
